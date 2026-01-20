@@ -17,6 +17,7 @@ Future<void> main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   FirebaseFirestore.instance.settings = const Settings(
+    
     persistenceEnabled: true,
   );
 
@@ -55,7 +56,7 @@ class _MyAppState extends State<MyApp> {
       builder: DevicePreview.appBuilder,
       theme: ThemeData.light(),
       darkTheme: ThemeData.dark(),
-      home: SplashScreen()
+      home: SplashScreen(),
     );
   }
 }

@@ -1,9 +1,10 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_purple_basket/User/layout/bottomnav.dart';
+import 'package:flutter_purple_basket/User/screens/productdetail.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -13,60 +14,136 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _bannerIndex = 0;
-  String _searchCategory = "";
-  String _searchProduct = "";
+  String _search = "";
+  String _selectedCategory = "";
 
-  final List<String> banners = [
-    'assets/images/banner1.jpg',
-    'assets/images/banner2.jpg',
-    'assets/images/banner3.jpg',
-    'assets/images/banner4.jpg',
-    // 'assets/images/banner5.jpg',
-    'assets/images/banner6.jpg',
-  ];
+  Uint8List? userImg;
+  String firstName = "";
 
-  final CollectionReference categoryRef =
-      FirebaseFirestore.instance.collection("Category");
-  final CollectionReference productRef =
-      FirebaseFirestore.instance.collection("Products");
+  final categoryRef = FirebaseFirestore.instance.collection("Category");
+  final productRef = FirebaseFirestore.instance.collection("Products");
 
-  final PageController _pageController = PageController();
+  final wishlistRef = FirebaseFirestore.instance.collection("Wishlist");
 
-  Timer? _bannerTimer;
+  Map<String, bool> wishlistMap = {}; // productId -> isInWishlist
 
   @override
   void initState() {
     super.initState();
-    _startBannerAutoSlide();
+    _loadUser();
+    _loadWishlist();
   }
 
-  void _startBannerAutoSlide() {
-    _bannerTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
-      if (_pageController.hasClients) {
-        int nextPage = (_bannerIndex + 1) % banners.length;
-        _pageController.animateToPage(
-          nextPage,
-          duration: const Duration(milliseconds: 500),
-          curve: Curves.easeInOut,
-        );
-      }
+  Future<void> _loadUser() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final doc = await FirebaseFirestore.instance
+        .collection("User")
+        .doc(user.uid)
+        .get();
+
+    if (doc.exists) {
+      final data = doc.data()!;
+      final name = data['User Name'] ?? "";
+      setState(() {
+        firstName = name.toString().split(" ").first;
+        if ((data['User Image'] ?? "").toString().isNotEmpty) {
+          userImg = base64Decode(data['User Image']);
+        }
+      });
+    }
+  }
+
+  Future<void> _loadWishlist() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final snapshot =
+        await wishlistRef.doc(user.uid).collection("items").get();
+
+    setState(() {
+      wishlistMap = {
+        for (var doc in snapshot.docs) doc.id: true,
+      };
     });
   }
 
-  @override
-  void dispose() {
-    _pageController.dispose();
-    _bannerTimer?.cancel();
-    super.dispose();
+  Uint8List? _img(String base64) {
+    try {
+      return base64.isEmpty ? null : base64Decode(base64);
+    } catch (_) {
+      return null;
+    }
   }
 
-  Uint8List? _getImageBytes(String imageStr) {
-    try {
-      if (imageStr.isEmpty) return null;
-      return base64Decode(imageStr);
-    } catch (e) {
-      return null;
+  /// ✅ ADD TO CART LOGIC
+  Future<void> _addToCart({
+    required String productId,
+    required String name,
+    required int price,
+    required String image,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final cartItemRef = FirebaseFirestore.instance
+        .collection("Cart")
+        .doc(user.uid)
+        .collection("items")
+        .doc(productId);
+
+    final snap = await cartItemRef.get();
+
+    if (snap.exists) {
+      await cartItemRef.update({
+        "quantity": FieldValue.increment(1),
+      });
+    } else {
+      await cartItemRef.set({
+        "name": name,
+        "price": price,
+        "image": image,
+        "quantity": 1,
+        "createdAt": FieldValue.serverTimestamp(),
+      });
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          "Added to cart",
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.all(16),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  /// ✅ WISHLIST LOGIC
+  Future<void> _toggleWishlist(String productId, Map<String, dynamic> data) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final docRef = wishlistRef.doc(user.uid).collection("items").doc(productId);
+
+    if (wishlistMap[productId] == true) {
+      await docRef.delete();
+      setState(() => wishlistMap[productId] = false);
+    } else {
+      await docRef.set({
+        "name": data['Product Name'],
+        "price": data['Price'],
+        "image": data['Image'],
+        "createdAt": FieldValue.serverTimestamp(),
+      });
+      setState(() => wishlistMap[productId] = true);
     }
   }
 
@@ -74,323 +151,382 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
-      bottomNavigationBar: const BottomNav(),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              /// 🔹 Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("Good day for shopping",
-                          style: TextStyle(fontSize: 12, color: Colors.grey)),
-                      SizedBox(height: 4),
-                      Text("Purple Basket",
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  Stack(
-                    children: [
-                      const Icon(Icons.shopping_cart_outlined, size: 26),
-                      Positioned(
-                        right: 0,
-                        top: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Text(
-                            "2",
-                            style:
-                                TextStyle(fontSize: 10, color: Colors.white),
-                          ),
-                        ),
-                      )
-                    ],
-                  )
+      body: Column(
+        children: [
+          /// 🔮 HEADER
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 50, 16, 20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.purple.shade800,
+                  Colors.purple.shade500,
+                  Colors.purple.shade300,
                 ],
               ),
-              const SizedBox(height: 16),
-
-              /// 🔹 Search
-              TextField(
-                onChanged: (v) {
-                  setState(() {
-                    _searchCategory = v.toLowerCase();
-                    _searchProduct = v.toLowerCase();
-                  });
-                },
-                decoration: InputDecoration(
-                  hintText: "Search in store",
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(28),
+                bottomRight: Radius.circular(28),
               ),
-
-              const SizedBox(height: 20),
-
-              /// 🔹 Categories
-              const Text("Popular Categories",
-                  style:
-                      TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 100,
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: categoryRef.orderBy("name").snapshots(),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return const Center(
-                          child: CircularProgressIndicator());
-                    }
-
-                    final categories = snapshot.data!.docs.where((doc) {
-                      final name =
-                          (doc['name'] ?? '').toString().toLowerCase();
-                      return name.contains(_searchCategory);
-                    }).toList();
-
-                    if (categories.isEmpty) {
-                      return const Center(child: Text("No categories found"));
-                    }
-
-                    return ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: categories.length,
-                      itemBuilder: (context, index) {
-                        final data =
-                            categories[index].data()! as Map<String, dynamic>;
-                        final imageBytes = _getImageBytes(data['image'] ?? '');
-                        return Container(
-                          width: 80,
-                          margin: const EdgeInsets.only(right: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              CircleAvatar(
-                                radius: 25,
-                                backgroundColor: Colors.purple.shade50,
-                                backgroundImage: imageBytes != null
-                                    ? MemoryImage(imageBytes)
-                                    : null,
-                                child: imageBytes == null
-                                    ? Text(
-                                        data['name'][0],
-                                        style: TextStyle(
-                                            color: Colors.purple.shade700,
-                                            fontWeight: FontWeight.bold),
-                                      )
-                                    : null,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                data['name'],
-                                style: const TextStyle(fontSize: 12),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              /// 🔹 Banner Slider with arrows
-              SizedBox(
-                height: 160,
-                child: Stack(
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    PageView.builder(
-                      controller: _pageController,
-                      itemCount: banners.length,
-                      onPageChanged: (index) {
-                        setState(() => _bannerIndex = index);
-                      },
-                      itemBuilder: (context, index) {
-                        return ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: Image.asset(
-                            banners[index],
-                            fit: BoxFit.cover,
-                            width: double.infinity,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          "Purple Basket",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
                           ),
-                        );
-                      },
-                    ),
-                    // Left arrow
-                    Positioned(
-                      left: 0,
-                      top: 0,
-                      bottom: 0,
-                      child: GestureDetector(
-                        onTap: () {
-                          int prev = (_bannerIndex - 1 + banners.length) % banners.length;
-                          _pageController.animateToPage(prev,
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.easeInOut);
-                        },
-                        child: Container(
-                          width: 40,
-                          color: Colors.black.withOpacity(0.2),
-                          child: const Icon(Icons.arrow_back_ios,
-                              color: Colors.white, size: 20),
                         ),
-                      ),
-                    ),
-                    // Right arrow
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      bottom: 0,
-                      child: GestureDetector(
-                        onTap: () {
-                          int next = (_bannerIndex + 1) % banners.length;
-                          _pageController.animateToPage(next,
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.easeInOut);
-                        },
-                        child: Container(
-                          width: 40,
-                          color: Colors.black.withOpacity(0.2),
-                          child: const Icon(Icons.arrow_forward_ios,
-                              color: Colors.white, size: 20),
+                        SizedBox(height: 4),
+                        Text(
+                          "Best Online Store",
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                          ),
                         ),
-                      ),
+                      ],
+                    ),
+                    const Spacer(),
+                    Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 22,
+                          backgroundColor: Colors.white,
+                          backgroundImage:
+                              userImg != null ? MemoryImage(userImg!) : null,
+                          child: userImg == null
+                              ? const Icon(Icons.person,
+                                  color: Colors.deepPurple)
+                              : null,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Hello $firstName",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  banners.length,
-                  (index) => Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    width: _bannerIndex == index ? 12 : 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: _bannerIndex == index
-                          ? const Color.fromRGBO(103, 58, 183, 1)
-                          : Colors.grey,
-                      borderRadius: BorderRadius.circular(6),
+                const SizedBox(height: 16),
+
+                /// 🔍 SEARCH
+                TextField(
+                  onChanged: (v) {
+                    setState(() {
+                      _search = v.toLowerCase();
+                    });
+                  },
+                  decoration: InputDecoration(
+                    hintText: "Search products",
+                    prefixIcon: const Icon(Icons.search),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
                     ),
                   ),
                 ),
-              ),
+              ],
+            ),
+          ),
 
-              const SizedBox(height: 24),
-
-              /// 🔹 Products Grid
-              const Text("Popular Products",
-                  style:
-                      TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              StreamBuilder<QuerySnapshot>(
-                stream: productRef
-                    .orderBy("Created At", descending: true)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  final products = snapshot.data!.docs.where((doc) {
-                    final name =
-                        (doc['Product Name'] ?? '').toString().toLowerCase();
-                    return name.contains(_searchProduct);
-                  }).toList();
-
-                  if (products.isEmpty) {
-                    return const Center(child: Text("No products found"));
-                  }
-
-                  return GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: products.length,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 0.7,
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  /// 🖼️ BANNER
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _search = "";
+                        _selectedCategory = "";
+                      });
+                    },
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Image.asset(
+                        "assets/images/banner6.jpg",
+                        height: 160,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
                     ),
-                    itemBuilder: (context, index) {
-                      final data =
-                          products[index].data()! as Map<String, dynamic>;
-                      final imageBytes = _getImageBytes(data['Image'] ?? '');
-                      return Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: imageBytes != null
-                                    ? Image.memory(
-                                        imageBytes,
-                                        fit: BoxFit.cover,
-                                        width: double.infinity,
-                                      )
-                                    : Container(
-                                        color: Colors.grey.shade300,
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  /// 📂 CATEGORIES
+                  const Text(
+                    "Categories",
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+
+                  SizedBox(
+                    height: 100,
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: categoryRef.orderBy("name").snapshots(),
+                      builder: (_, s) {
+                        if (!s.hasData) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        }
+
+                        return ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: s.data!.docs.length,
+                          itemBuilder: (_, i) {
+                            final data =
+                                s.data!.docs[i].data() as Map<String, dynamic>;
+                            final img = _img(data['image'] ?? '');
+                            final isSelected =
+                                _selectedCategory == data['name'];
+
+                            return GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _selectedCategory =
+                                      isSelected ? "" : data['name'];
+                                });
+                              },
+                              child: Container(
+                                width: 90,
+                                margin: const EdgeInsets.only(right: 12),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? Colors.purple.shade500
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                        color: Colors.black12, blurRadius: 5)
+                                  ],
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 24,
+                                      backgroundColor:
+                                          Colors.purple.shade50,
+                                      backgroundImage: img != null
+                                          ? MemoryImage(img)
+                                          : null,
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      data['name'],
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isSelected
+                                            ? Colors.white
+                                            : Colors.black,
                                       ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: Text(
-                                data['Product Name'] ?? '',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 8),
-                              child: Text(
-                                "\$${data['Price'] ?? '0'}",
-                                style: const TextStyle(color: Colors.grey),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                          ],
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  /// 🛍️ PRODUCTS
+                  const Text(
+                    "Products",
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+
+                  StreamBuilder<QuerySnapshot>(
+                    stream: productRef
+                        .orderBy("Created At", descending: true)
+                        .snapshots(),
+                    builder: (_, s) {
+                      if (!s.hasData) {
+                        return const Center(
+                            child: CircularProgressIndicator());
+                      }
+
+                      final products = s.data!.docs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final name = data['Product Name']
+                            .toString()
+                            .toLowerCase();
+
+                        if (_search.isNotEmpty) {
+                          return name.contains(_search);
+                        }
+
+                        if (_selectedCategory.isNotEmpty) {
+                          return data['Category'] == _selectedCategory;
+                        }
+
+                        return true;
+                      }).toList();
+
+                      return GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: products.length,
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: 0.7,
                         ),
+                        itemBuilder: (_, i) {
+                          final doc = products[i];
+                          final data =
+                              doc.data() as Map<String, dynamic>;
+                          final img = _img(data['Image'] ?? '');
+                          final isInWishlist =
+                              wishlistMap[doc.id] ?? false;
+
+                          return GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      DetailProductScreen(productId: doc.id),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: const [
+                                  BoxShadow(
+                                      color: Colors.black12, blurRadius: 5)
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Stack(
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          child: img != null
+                                              ? Image.memory(
+                                                  img,
+                                                  fit: BoxFit.cover,
+                                                  width: double.infinity,
+                                                )
+                                              : Container(
+                                                  color: Colors.grey.shade300),
+                                        ),
+                                        // Wishlist heart
+                                        Positioned(
+                                          top: 8,
+                                          right: 8,
+                                          child: GestureDetector(
+                                            onTap: () {
+                                              _toggleWishlist(doc.id, data);
+                                            },
+                                            child: Icon(
+                                              isInWishlist
+                                                  ? Icons.favorite
+                                                  : Icons.favorite_border,
+                                              color: Colors.red,
+                                              size: 28,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.all(8),
+                                    child: Text(
+                                      data['Product Name'],
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8),
+                                    child: Text(
+                                      "Rs. ${data['Price']}",
+                                      style:
+                                          const TextStyle(color: Colors.grey),
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.all(8),
+                                    child: SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton(
+                                        onPressed: () async {
+                                          await _addToCart(
+                                            productId: doc.id,
+                                            name: data['Product Name'],
+                                            price: int.parse(
+                                                data['Price'].toString()),
+                                            image: data['Image'],
+                                          );
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.purple,
+                                        ),
+                                        child: const Text(
+                                          "Add to Cart",
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       );
                     },
-                  );
-                },
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

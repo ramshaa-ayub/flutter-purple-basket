@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "240894999884",
+    "project_id": "purple-basket",
+    "storage_bucket": "purple-basket.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:240894999884:android:462101addba757dda1a3e9",
+        "android_client_info": {
+          "package_name": "com.example.flutter_purple_basket"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCJwF2kngnX-Y2lQ91YULCSYUO3FzK10xw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:240894999884:android:cf820f90516a1c53a1a3e9",
+        "android_client_info": {
+          "package_name": "com.example.purple_basket"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCJwF2kngnX-Y2lQ91YULCSYUO3FzK10xw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

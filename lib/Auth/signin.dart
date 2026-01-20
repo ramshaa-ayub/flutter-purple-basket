@@ -1,12 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-
+import 'package:flutter_purple_basket/Admin/dashboard.dart';
 import 'package:flutter_purple_basket/Auth/forgotpassword.dart';
 import 'package:flutter_purple_basket/Auth/signup.dart';
+import 'package:flutter_purple_basket/User/layout/bottomnav.dart';
 
-import 'package:flutter_purple_basket/adminpanel.dart';
-import 'package:flutter_purple_basket/home.dart';
+
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -49,12 +49,12 @@ class _SignInScreenState extends State<SignInScreen> {
             if (role == 'admin') {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (_) => AdminPanel()),
+                MaterialPageRoute(builder: (_) => AdminDashboard()),
               );
             } else {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (_) => Home()),
+                MaterialPageRoute(builder: (_) => BottomNavScreen()),
               );
             }
           } else {

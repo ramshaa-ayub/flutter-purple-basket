@@ -3,19 +3,25 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_purple_basket/Admin/notification/admin_notification_page.dart';
+import 'package:flutter_purple_basket/Auth/signin.dart';
 import 'package:flutter_purple_basket/Admin/category/readcat.dart';
 import 'package:flutter_purple_basket/Admin/dashboard.dart';
 import 'package:flutter_purple_basket/Admin/order/readorder.dart';
 import 'package:flutter_purple_basket/Admin/product/readproduct.dart';
 import 'package:flutter_purple_basket/Admin/user/readuser.dart';
-import 'package:flutter_purple_basket/Auth/signin.dart';
-
 
 class AdminLayout extends StatefulWidget {
   final Widget child;
   final String title;
+  final List<Widget>? appBarActions; // optional actions
 
-  const AdminLayout({super.key, required this.child, this.title = "Dashboard"});
+  const AdminLayout({
+    super.key,
+    required this.child,
+    this.title = "Dashboard",
+    this.appBarActions,
+  });
 
   @override
   State<AdminLayout> createState() => _AdminLayoutState();
@@ -76,10 +82,13 @@ class _AdminLayoutState extends State<AdminLayout> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black87),
         title: Text(widget.title,
-            style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 20)),
-        actions: [
-          IconButton(onPressed: _handleLogout, icon: const Icon(Icons.logout_outlined, color: Colors.grey)),
-          const SizedBox(width: 10),
+            style: const TextStyle(
+                color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 20)),
+        actions: widget.appBarActions ?? [
+          IconButton(
+            onPressed: _handleLogout,
+            icon: const Icon(Icons.logout_outlined, color: Colors.grey),
+          ),
         ],
       ),
       drawer: _buildDrawer(),
@@ -112,7 +121,8 @@ class _AdminLayoutState extends State<AdminLayout> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(userName,
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                            style: const TextStyle(
+                                color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                             overflow: TextOverflow.ellipsis),
                         Text(userEmail,
                             style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12),
@@ -134,8 +144,10 @@ class _AdminLayoutState extends State<AdminLayout> {
                   _drawerItemWidget(Icons.dashboard_rounded, "Dashboard", const AdminDashboard()),
                   _drawerItemWidget(Icons.category_rounded, "Categories", const ReadCategoryScreen()),
                   _drawerItemWidget(Icons.shopping_bag_outlined, "Products", const ReadProductScreen()), 
-                  _drawerItemWidget(Icons.shopping_cart_outlined, "Orders", const MyReadOrder()),
+                  _drawerItemWidget(Icons.shopping_cart_outlined, "Orders", const AdminOrdersScreen()),
                   _drawerItemWidget(Icons.group_rounded, "Users", const MyReadUser()),
+                  _drawerItemWidget(Icons.notification_add, "Notifications", const AdminNotificationsPage()),
+
                 ],
               ),
             ),

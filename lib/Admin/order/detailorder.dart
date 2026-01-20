@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_purple_basket/Admin/layout.dart';
+import 'package:printing/printing.dart';
+import 'package:pdf/widgets.dart' as pw;
 
 class DetailOrderScreen extends StatefulWidget {
   final String orderId;
@@ -12,90 +15,205 @@ class DetailOrderScreen extends StatefulWidget {
 }
 
 class _DetailOrderScreenState extends State<DetailOrderScreen> {
-  final CollectionReference ordersRef = FirebaseFirestore.instance.collection('Orders');
-  final CollectionReference orderDetailsRef = FirebaseFirestore.instance.collection('OrderDetails');
+  Map<String, dynamic>? orderData;
+  List<Map<String, dynamic>> orderItems = [];
+
+  final CollectionReference ordersRef =
+      FirebaseFirestore.instance.collection('Orders');
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrder();
+  }
+
+  Future<void> _loadOrder() async {
+    try {
+      // Fetch order
+      var orderSnap = await ordersRef.doc(widget.orderId).get();
+      if (orderSnap.exists) {
+        orderData = orderSnap.data() as Map<String, dynamic>;
+      }
+
+      // Fetch order items from nested collection
+      var itemsSnap =
+          await ordersRef.doc(widget.orderId).collection('OrderDetails').get();
+
+      // Properly cast to Map<String, dynamic>
+      orderItems =
+          // ignore: unnecessary_cast
+          itemsSnap.docs.map((e) => e.data() as Map<String, dynamic>).toList();
+
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint("Error loading order: $e");
+    }
+  }
+
+  Color statusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return Colors.orange;
+      case 'ready':
+        return Colors.blue;
+      case 'delivered':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  void _printInvoice() {
+    if (orderData == null) return;
+
+    Printing.layoutPdf(onLayout: (format) async {
+      final pdf = pw.Document();
+
+      pdf.addPage(pw.Page(build: (pw.Context context) {
+        return pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text("Invoice",
+                style:
+                    pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 20),
+            pw.Text("Order ID: ${widget.orderId.substring(0, 6)}"),
+            pw.Text("Customer: ${orderData!['name'] ?? 'N/A'}"),
+            pw.Text("Phone: ${orderData!['phone'] ?? 'N/A'}"),
+            pw.Text("Address: ${orderData!['address'] ?? 'N/A'}"),
+            pw.SizedBox(height: 20),
+            pw.Text("Products:", style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 10),
+            pw.Table.fromTextArray(
+              headers: ['Product', 'Qty', 'Price', 'Subtotal'],
+              data: orderItems.map((item) {
+                final name = item['name'] ?? 'N/A';
+                final qty = item['quantity'] ?? 0;
+                final price = (item['price'] ?? 0).toDouble();
+                final subtotal = (price * qty).toStringAsFixed(2);
+                return [name, qty.toString(), price.toStringAsFixed(2), subtotal];
+              }).toList(),
+            ),
+            pw.SizedBox(height: 20),
+            pw.Text(
+              "Total: Rs.${(orderData!['totalAmount'] ?? 0).toDouble().toStringAsFixed(2)}",
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            ),
+          ],
+        );
+      }));
+
+      return pdf.save();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return AdminLayout(
       title: "Order Details",
-      child: FutureBuilder<DocumentSnapshot>(
-        future: ordersRef.doc(widget.orderId).get(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          var order = snapshot.data!.data() as Map<String, dynamic>;
-          String userName = order['Customer Name'] ?? "N/A";
-          String phone = order['Contact Phone'] ?? "N/A";
-          String address = order['DeliveryAddress'] ?? "N/A";
-          String status = order['Status'] ?? "Pending";
-          double total = (order['TotalAmount'] ?? 0).toDouble();
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Order Info
-              Card(
-                margin: const EdgeInsets.all(20),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("Order ID: ${widget.orderId}", style: const TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      Text("Customer: $userName"),
-                      Text("Phone: $phone"),
-                      Text("Address: $address"),
-                      const SizedBox(height: 8),
-                      Text("Status: $status"),
-                      Text("Total: \$${total.toStringAsFixed(2)}"),
-                    ],
+      appBarActions: [
+        IconButton(
+          icon: const Icon(Icons.print),
+          onPressed: _printInvoice,
+          tooltip: "Print Invoice",
+        ),
+      ],
+      child: orderData == null
+          ? const Center(child: CircularProgressIndicator())
+          : Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  /// 🔹 ORDER INFO CARD
+                  Card(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
+                    elevation: 4,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text("Order #${widget.orderId.substring(0, 6)}",
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold, fontSize: 16)),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: statusColor(orderData!['status'] ?? 'pending')
+                                      .withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(orderData!['status'] ?? 'Pending',
+                                    style: TextStyle(
+                                        color: statusColor(
+                                            orderData!['status'] ?? 'pending'),
+                                        fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Text("Customer: ${orderData!['name'] ?? 'N/A'}"),
+                          Text("Phone: ${orderData!['phone'] ?? 'N/A'}"),
+                          Text("Address: ${orderData!['address'] ?? 'N/A'}"),
+                          const SizedBox(height: 8),
+                          Text(
+                            "Total: Rs.${(orderData!['totalAmount'] ?? 0).toDouble().toStringAsFixed(2)}",
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ),
 
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20),
-                child: Text("Products", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              ),
-              const SizedBox(height: 10),
+                  const SizedBox(height: 20),
+                  const Text("Products",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 10),
 
-              // Order Items
-              Expanded(
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: orderDetailsRef.where('OrderId', isEqualTo: widget.orderId).snapshots(),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                    var items = snapshot.data!.docs;
-
-                    if (items.isEmpty) return const Center(child: Text("No items found"));
-
-                    return ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  /// 🔹 ORDER ITEMS
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: orderItems.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 10),
-                      itemCount: items.length,
-                      itemBuilder: (context, index) {
-                        var item = items[index].data() as Map<String, dynamic>;
-                        String name = item['Product Name'] ?? "N/A";
-                        double price = (item['Price'] ?? 0).toDouble();
-                        int qty = (item['Quantity'] ?? 0).toInt();
-
-                        return ListTile(
-                          tileColor: Colors.purple.shade50,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text("Qty: $qty x \$${price.toStringAsFixed(2)}"),
-                          trailing: Text("\$${(price * qty).toStringAsFixed(2)}"),
+                      itemBuilder: (_, index) {
+                        final item = orderItems[index];
+                        return Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: const [
+                              BoxShadow(color: Colors.black12, blurRadius: 4)
+                            ],
+                          ),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.all(12),
+                            leading: item['image'] != null && item['image'] != ""
+                                ? Image.memory(base64Decode(item['image']),
+                                    width: 50, height: 50, fit: BoxFit.cover)
+                                : const Icon(Icons.image, size: 40),
+                            title: Text(item['name'] ?? 'N/A',
+                                style:
+                                    const TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text(
+                                "Rs.${item['price']} x ${item['quantity']}"),
+                            trailing: Text(
+                              "Rs.${(item['price'] * item['quantity']).toStringAsFixed(2)}",
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
                         );
                       },
-                    );
-                  },
-                ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          );
-        },
-      ),
+            ),
     );
   }
 }
