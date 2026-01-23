@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_purple_basket/Admin/dashboard.dart';
 import 'package:flutter_purple_basket/Auth/forgotpassword.dart';
 import 'package:flutter_purple_basket/Auth/signup.dart';
-import 'package:flutter_purple_basket/User/layout/bottomnav.dart';
+import 'package:flutter_purple_basket/onboardingscreen.dart';
 
 
 
@@ -54,7 +54,7 @@ class _SignInScreenState extends State<SignInScreen> {
             } else {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (_) => BottomNavScreen()),
+                MaterialPageRoute(builder: (_) => IntroScreen()),
               );
             }
           } else {
