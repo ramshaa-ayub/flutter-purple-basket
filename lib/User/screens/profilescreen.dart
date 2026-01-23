@@ -77,6 +77,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text("My Profile", style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.purple,
         actions: [
