@@ -73,7 +73,7 @@ class _IntroScreenState extends State<IntroScreen> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(50),
                   child: Image.asset(
-                    "images/onboarding-3.png",
+                    "assets/images/onboarding-3.png",
                     height: 400,
                     width: 350,
                     fit: BoxFit.cover,
@@ -113,7 +113,7 @@ class _IntroScreenState extends State<IntroScreen> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(50),
                   child: Image.asset(
-                    "images/onboarding-1.png",
+                    "assets/images/onboarding-1.png",
                     height: 400,
                     width: 350,
                     fit: BoxFit.cover,
@@ -153,7 +153,7 @@ class _IntroScreenState extends State<IntroScreen> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(50),
                   child: Image.asset(
-                    "images/onboarding-2.png",
+                    "assets/images/onboarding-2.png",
                     height: 400,
                     width: 350,
                     fit: BoxFit.cover,
