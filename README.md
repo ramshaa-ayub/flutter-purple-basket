@@ -1,7 +1,7 @@
 # 🛍️ Purple Basket – Flutter E-Commerce Application
 
 <p align="center">
-  <img src="assets/images/thumbnail.png" alt="Purple Basket App" width="700">
+  <img src="assets/images/thumbnail.png" alt="Purple Basket App" width="900">
 </p>
 
 Purple Basket is a complete Flutter-based e-commerce mobile application built with Firebase.  
@@ -124,7 +124,9 @@ flutter run
 👩‍💻 Developer
 
 Ramsha Ayub
+
 Flutter Developer
+
 Purple Basket App 💜
 
 📌 Notes
